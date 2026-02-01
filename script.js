@@ -149,12 +149,51 @@ function reloadImages() {
     loadImages();
 }
 
+// Функция вычисления оптимального количества изображений на основе размера экрана
+function calculateImageCount() {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const viewportArea = viewportWidth * viewportHeight;
+    
+    // Вычисляем площадь, занимаемую карточкой (примерно)
+    const card = document.querySelector('.card');
+    let cardArea = 0;
+    if (card) {
+        const rect = card.getBoundingClientRect();
+        cardArea = rect.width * rect.height;
+    }
+    
+    // Доступная площадь для изображений (с учетом отступов)
+    const availableArea = viewportArea - cardArea;
+    
+    // Средний размер изображения (примерно 100x100px с учетом поворотов и отступов)
+    const avgImageArea = 120 * 120; // ~14400px² на изображение
+    
+    // Вычисляем максимальное количество изображений
+    // Используем коэффициент заполнения 0.3-0.4 (30-40% экрана)
+    const fillRatio = viewportWidth < 768 ? 0.25 : viewportWidth < 1024 ? 0.3 : 0.4;
+    const maxImages = Math.floor((availableArea * fillRatio) / avgImageArea);
+    
+    // Ограничиваем минимальным и максимальным значениями
+    const minImages = viewportWidth < 480 ? 5 : viewportWidth < 768 ? 8 : 15;
+    const maxAllowedImages = viewportWidth < 480 ? 12 : viewportWidth < 768 ? 18 : imageFiles.length;
+    
+    return Math.max(minImages, Math.min(maxImages, maxAllowedImages));
+}
+
 // Загрузка и размещение изображений
 function loadImages() {
     const maxImageSize = 150;
     const minImageSize = 80;
     
-    imageFiles.forEach((filename, index) => {
+    // Вычисляем количество изображений для текущего размера экрана
+    const imageCount = calculateImageCount();
+    
+    // Берем случайные изображения из массива
+    const shuffledImages = [...imageFiles].sort(() => Math.random() - 0.5);
+    const selectedImages = shuffledImages.slice(0, imageCount);
+    
+    selectedImages.forEach((filename, index) => {
         const img = document.createElement('img');
         img.src = `images/${filename}`;
         img.alt = 'Valentine decoration';
@@ -362,9 +401,15 @@ btnNo.addEventListener('mouseleave', function() {
 });
 
 // Обработка изменения размера окна для пересчета позиций изображений
+let resizeTimeout;
 window.addEventListener('resize', function() {
-    // При изменении размера окна можно пересчитать позиции
-    // Но для простоты оставим как есть
+    // Дебаунс для оптимизации - пересчитываем только после завершения изменения размера
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        setCardExclusionZone();
+        saveBtnNoPosition();
+        reloadImages();
+    }, 300);
 });
 
 // Инициализация при загрузке страницы
