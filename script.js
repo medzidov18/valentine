@@ -55,9 +55,7 @@ function setCardExclusionZone() {
     const card = document.querySelector('.card');
     if (card) {
         const rect = card.getBoundingClientRect();
-        // Меньший отступ на мобильных устройствах
-        const isMobile = window.innerWidth < 768;
-        const padding = isMobile ? 30 : 50;
+        const padding = 40;
         cardExclusionZone = {
             left: rect.left - padding,
             top: rect.top - padding,
@@ -120,9 +118,7 @@ function canPlaceImage(x, y, width, height, rotation) {
     }
     
     // Проверяем пересечение с уже размещенными изображениями
-    // На мобильных устройствах разрешаем небольшое перекрытие (20% площади)
-    const isMobile = window.innerWidth < 768;
-    const overlapThreshold = isMobile ? 0.2 : 0.1; // 20% на мобильных, 10% на десктопе
+    const overlapThreshold = 0.15; // Разрешаем перекрытие до 15% площади
     
     for (let placed of placedImages) {
         if (checkCollision(bounds, placed)) {
@@ -150,32 +146,19 @@ function canPlaceImage(x, y, width, height, rotation) {
 
 // Функция поиска свободной позиции для изображения
 function findFreePosition(width, height, rotation) {
-    const maxAttempts = 2000; // Увеличено количество попыток
+    const maxAttempts = 2000;
     const padding = 15;
-    const isMobile = window.innerWidth < 768;
     
-    // На мобильных пробуем сначала по краям, где больше места
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        let randomX, randomY;
-        
-        if (isMobile && attempt < maxAttempts / 2) {
-            // На мобильных сначала пробуем верхнюю и нижнюю части экрана
-            const useTop = attempt % 2 === 0;
-            randomY = useTop 
-                ? padding + Math.random() * (window.innerHeight * 0.3)
-                : window.innerHeight * 0.7 + Math.random() * (window.innerHeight * 0.3 - padding);
-            randomX = padding + Math.random() * (window.innerWidth - padding * 2);
-        } else {
-            randomX = padding + Math.random() * (window.innerWidth - padding * 2);
-            randomY = padding + Math.random() * (window.innerHeight - padding * 2);
-        }
+        const randomX = padding + Math.random() * (window.innerWidth - padding * 2);
+        const randomY = padding + Math.random() * (window.innerHeight - padding * 2);
         
         if (canPlaceImage(randomX, randomY, width, height, rotation)) {
             return { x: randomX, y: randomY };
         }
     }
     
-    // Если не нашли свободное место, возвращаем позицию с минимальным перекрытием
+    // Если не нашли свободное место, возвращаем случайную позицию
     return {
         x: padding + Math.random() * (window.innerWidth - padding * 2),
         y: padding + Math.random() * (window.innerHeight - padding * 2)
@@ -192,36 +175,15 @@ function reloadImages() {
     loadImages();
 }
 
-// Функция вычисления оптимального количества изображений на основе размера экрана
+// Функция вычисления количества изображений - случайное от 20 до 25
 function calculateImageCount() {
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    
-    // Упрощенный расчет на основе ширины экрана
-    // На мобильных устройствах используем фиксированные значения
-    if (viewportWidth < 480) {
-        // Маленькие экраны (iPhone и т.д.) - 10-15 изображений
-        return Math.min(15, imageFiles.length);
-    } else if (viewportWidth < 768) {
-        // Планшеты - 15-20 изображений
-        return Math.min(20, imageFiles.length);
-    } else if (viewportWidth < 1024) {
-        // Небольшие десктопы - 20-25 изображений
-        return Math.min(25, imageFiles.length);
-    } else {
-        // Большие экраны - все изображения
-        return imageFiles.length;
-    }
+    return Math.floor(20 + Math.random() * 6); // 20-25 случайное число
 }
 
 // Загрузка и размещение изображений
 function loadImages() {
-    const isMobile = window.innerWidth < 768;
-    const isSmallMobile = window.innerWidth < 480;
-    
-    // Размеры изображений зависят от устройства
-    const maxImageSize = isSmallMobile ? 100 : isMobile ? 120 : 150;
-    const minImageSize = isSmallMobile ? 60 : isMobile ? 70 : 80;
+    const maxImageSize = 130;
+    const minImageSize = 70;
     
     // Вычисляем количество изображений для текущего размера экрана
     const imageCount = calculateImageCount();
