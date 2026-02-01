@@ -55,7 +55,9 @@ function setCardExclusionZone() {
     const card = document.querySelector('.card');
     if (card) {
         const rect = card.getBoundingClientRect();
-        const padding = 50; // Отступ вокруг карточки
+        // Меньший отступ на мобильных устройствах
+        const isMobile = window.innerWidth < 768;
+        const padding = isMobile ? 30 : 50;
         cardExclusionZone = {
             left: rect.left - padding,
             top: rect.top - padding,
@@ -97,21 +99,49 @@ function getImageBounds(x, y, width, height, rotation) {
 function canPlaceImage(x, y, width, height, rotation) {
     const bounds = getImageBounds(x, y, width, height, rotation);
     
-    // Проверяем границы экрана
-    if (bounds.left < 0 || bounds.top < 0 || 
-        bounds.right > window.innerWidth || bounds.bottom > window.innerHeight) {
+    // Проверяем границы экрана (с небольшим отступом)
+    const margin = 10;
+    if (bounds.left < -margin || bounds.top < -margin || 
+        bounds.right > window.innerWidth + margin || bounds.bottom > window.innerHeight + margin) {
         return false;
     }
     
-    // Проверяем пересечение с зоной исключения карточки
-    if (cardExclusionZone && checkCollision(bounds, cardExclusionZone)) {
-        return false;
+    // Проверяем пересечение с зоной исключения карточки (с увеличенным отступом)
+    if (cardExclusionZone) {
+        const expandedZone = {
+            left: cardExclusionZone.left - 30,
+            top: cardExclusionZone.top - 30,
+            right: cardExclusionZone.right + 30,
+            bottom: cardExclusionZone.bottom + 30
+        };
+        if (checkCollision(bounds, expandedZone)) {
+            return false;
+        }
     }
     
     // Проверяем пересечение с уже размещенными изображениями
+    // На мобильных устройствах разрешаем небольшое перекрытие (20% площади)
+    const isMobile = window.innerWidth < 768;
+    const overlapThreshold = isMobile ? 0.2 : 0.1; // 20% на мобильных, 10% на десктопе
+    
     for (let placed of placedImages) {
         if (checkCollision(bounds, placed)) {
-            return false;
+            // Вычисляем площадь пересечения
+            const overlapLeft = Math.max(bounds.left, placed.left);
+            const overlapTop = Math.max(bounds.top, placed.top);
+            const overlapRight = Math.min(bounds.right, placed.right);
+            const overlapBottom = Math.min(bounds.bottom, placed.bottom);
+            
+            if (overlapLeft < overlapRight && overlapTop < overlapBottom) {
+                const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
+                const boundsArea = bounds.width * bounds.height;
+                const overlapRatio = overlapArea / boundsArea;
+                
+                // Если перекрытие больше порога, отклоняем
+                if (overlapRatio > overlapThreshold) {
+                    return false;
+                }
+            }
         }
     }
     
@@ -120,19 +150,32 @@ function canPlaceImage(x, y, width, height, rotation) {
 
 // Функция поиска свободной позиции для изображения
 function findFreePosition(width, height, rotation) {
-    const maxAttempts = 1000;
-    const padding = 20;
+    const maxAttempts = 2000; // Увеличено количество попыток
+    const padding = 15;
+    const isMobile = window.innerWidth < 768;
     
+    // На мобильных пробуем сначала по краям, где больше места
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const randomX = padding + Math.random() * (window.innerWidth - padding * 2);
-        const randomY = padding + Math.random() * (window.innerHeight - padding * 2);
+        let randomX, randomY;
+        
+        if (isMobile && attempt < maxAttempts / 2) {
+            // На мобильных сначала пробуем верхнюю и нижнюю части экрана
+            const useTop = attempt % 2 === 0;
+            randomY = useTop 
+                ? padding + Math.random() * (window.innerHeight * 0.3)
+                : window.innerHeight * 0.7 + Math.random() * (window.innerHeight * 0.3 - padding);
+            randomX = padding + Math.random() * (window.innerWidth - padding * 2);
+        } else {
+            randomX = padding + Math.random() * (window.innerWidth - padding * 2);
+            randomY = padding + Math.random() * (window.innerHeight - padding * 2);
+        }
         
         if (canPlaceImage(randomX, randomY, width, height, rotation)) {
             return { x: randomX, y: randomY };
         }
     }
     
-    // Если не нашли свободное место, возвращаем случайную позицию
+    // Если не нашли свободное место, возвращаем позицию с минимальным перекрытием
     return {
         x: padding + Math.random() * (window.innerWidth - padding * 2),
         y: padding + Math.random() * (window.innerHeight - padding * 2)
@@ -153,38 +196,32 @@ function reloadImages() {
 function calculateImageCount() {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const viewportArea = viewportWidth * viewportHeight;
     
-    // Вычисляем площадь, занимаемую карточкой (примерно)
-    const card = document.querySelector('.card');
-    let cardArea = 0;
-    if (card) {
-        const rect = card.getBoundingClientRect();
-        cardArea = rect.width * rect.height;
+    // Упрощенный расчет на основе ширины экрана
+    // На мобильных устройствах используем фиксированные значения
+    if (viewportWidth < 480) {
+        // Маленькие экраны (iPhone и т.д.) - 10-15 изображений
+        return Math.min(15, imageFiles.length);
+    } else if (viewportWidth < 768) {
+        // Планшеты - 15-20 изображений
+        return Math.min(20, imageFiles.length);
+    } else if (viewportWidth < 1024) {
+        // Небольшие десктопы - 20-25 изображений
+        return Math.min(25, imageFiles.length);
+    } else {
+        // Большие экраны - все изображения
+        return imageFiles.length;
     }
-    
-    // Доступная площадь для изображений (с учетом отступов)
-    const availableArea = viewportArea - cardArea;
-    
-    // Средний размер изображения (примерно 100x100px с учетом поворотов и отступов)
-    const avgImageArea = 120 * 120; // ~14400px² на изображение
-    
-    // Вычисляем максимальное количество изображений
-    // Используем коэффициент заполнения 0.3-0.4 (30-40% экрана)
-    const fillRatio = viewportWidth < 768 ? 0.25 : viewportWidth < 1024 ? 0.3 : 0.4;
-    const maxImages = Math.floor((availableArea * fillRatio) / avgImageArea);
-    
-    // Ограничиваем минимальным и максимальным значениями
-    const minImages = viewportWidth < 480 ? 5 : viewportWidth < 768 ? 8 : 15;
-    const maxAllowedImages = viewportWidth < 480 ? 12 : viewportWidth < 768 ? 18 : imageFiles.length;
-    
-    return Math.max(minImages, Math.min(maxImages, maxAllowedImages));
 }
 
 // Загрузка и размещение изображений
 function loadImages() {
-    const maxImageSize = 150;
-    const minImageSize = 80;
+    const isMobile = window.innerWidth < 768;
+    const isSmallMobile = window.innerWidth < 480;
+    
+    // Размеры изображений зависят от устройства
+    const maxImageSize = isSmallMobile ? 100 : isMobile ? 120 : 150;
+    const minImageSize = isSmallMobile ? 60 : isMobile ? 70 : 80;
     
     // Вычисляем количество изображений для текущего размера экрана
     const imageCount = calculateImageCount();
